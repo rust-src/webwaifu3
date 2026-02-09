@@ -9,7 +9,26 @@
 	const recorder = getSttRecorder();
 
 	let textareaEl: HTMLTextAreaElement;
-	let recorderInitialized = false;
+
+	function ensureRecorderCallbacks() {
+		recorder.onModelReady = () => {
+			stt.modelLoading = false;
+			stt.modelReady = true;
+			toast('Whisper model ready');
+			addLog('Whisper model loaded', 'info');
+		};
+		recorder.onModelError = (err) => {
+			stt.modelLoading = false;
+			toast('Whisper model failed: ' + err);
+		};
+		recorder.onError = (err) => {
+			toast('STT error: ' + err);
+			stt.recording = false;
+		};
+		recorder.onTranscript = (text) => {
+			addLog(`STT transcript: "${text.slice(0, 60)}"`, 'info');
+		};
+	}
 
 	async function handleMicClick() {
 		if (!stt.enabled) {
@@ -39,33 +58,21 @@
 			return;
 		}
 
-		// Lazy-init: first click downloads model
-		if (!recorderInitialized) {
+		// Always wire callbacks (handles auto-init case where ChatBar wasn't the one that initialized)
+		ensureRecorderCallbacks();
+
+		// Lazy-init if not yet initialized (idempotent — recorder.initialize() skips if already done)
+		if (!recorder.isModelReady() && !stt.modelLoading) {
 			stt.modelLoading = true;
 			try {
-				recorder.onModelReady = () => {
-					stt.modelLoading = false;
-					stt.modelReady = true;
-					toast('Whisper model ready');
-					addLog('Whisper model loaded', 'info');
-				};
-				recorder.onModelError = (err) => {
-					stt.modelLoading = false;
-					toast('Whisper model failed: ' + err);
-				};
-				recorder.onError = (err) => {
-					toast('STT error: ' + err);
-					stt.recording = false;
-				};
 				await recorder.initialize();
-				recorderInitialized = true;
 			} catch (e: any) {
 				stt.modelLoading = false;
 				toast('Failed to init STT: ' + e.message);
 				return;
 			}
 
-			// Wait for model to be ready before starting
+			// Model still downloading — come back when ready
 			if (!recorder.isModelReady()) {
 				toast('Loading Whisper model...');
 				return;

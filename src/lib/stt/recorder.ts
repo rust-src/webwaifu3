@@ -16,6 +16,8 @@ export class SttRecorder {
 	onError: ((error: string) => void) | null = null;
 
 	async initialize() {
+		if (this.worker) return; // Already initialized — don't create duplicate workers
+
 		this.worker = new Worker(new URL('./whisper-worker.ts', import.meta.url), { type: 'module' });
 
 		this.worker.addEventListener('message', (e: MessageEvent) => {
@@ -64,8 +66,24 @@ export class SttRecorder {
 		this.worker.postMessage({ type: 'init-model' });
 	}
 
+	async checkMicPermission(): Promise<'granted' | 'denied' | 'prompt'> {
+		try {
+			const result = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+			return result.state;
+		} catch {
+			return 'prompt'; // Permissions API not supported, let getUserMedia handle it
+		}
+	}
+
 	async startRecording() {
 		if (this.recording) return;
+
+		// Pre-check mic permission to give clear feedback
+		const permState = await this.checkMicPermission();
+		if (permState === 'denied') {
+			this.onError?.('Microphone permission denied. Please allow mic access in your browser settings and reload.');
+			return;
+		}
 
 		try {
 			this.stream = await navigator.mediaDevices.getUserMedia({

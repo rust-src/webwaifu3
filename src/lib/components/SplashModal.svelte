@@ -33,7 +33,8 @@
 					<h2>Before You Start</h2>
 					<ul>
 						<li><strong>LLM Required</strong> &mdash; You need either a local model server (<strong>Ollama</strong> or <strong>LM Studio</strong>) or a cloud API key (<strong>OpenAI</strong> / <strong>OpenRouter</strong>).</li>
-						<li><strong>CORS for Local Models</strong> &mdash; If using Ollama, you must set <code>OLLAMA_ORIGINS=*</code> before running <code>ollama serve</code>. For LM Studio, enable CORS in the server settings.</li>
+						<li><strong>Ollama Network Access</strong> &mdash; In Ollama's settings, enable <strong>"Allow through network"</strong> so the browser can reach it. You also need to set allowed origins: set the environment variable <code>OLLAMA_ORIGINS=*</code> (or add your app's URL) before running <code>ollama serve</code>. On Windows, set it in System Environment Variables and restart Ollama.</li>
+					<li><strong>LM Studio CORS</strong> &mdash; Enable CORS in the LM Studio server settings.</li>
 						<li><strong>API Keys are Stored Locally</strong> &mdash; All API keys (LLM, TTS) are saved in your browser's IndexedDB. They never leave your machine except when sent directly to the provider APIs.</li>
 					</ul>
 				</section>
@@ -51,7 +52,8 @@
 					<ol>
 						<li>Install <a href="https://ollama.ai" target="_blank" rel="noopener">Ollama</a> or <a href="https://lmstudio.ai" target="_blank" rel="noopener">LM Studio</a></li>
 						<li>Pull a model: <code>ollama pull llama3.2</code></li>
-						<li>Start with CORS: <code>OLLAMA_ORIGINS=* ollama serve</code></li>
+						<li>In Ollama settings, enable <strong>"Allow through network"</strong></li>
+						<li>Set <code>OLLAMA_ORIGINS=*</code> as an environment variable and restart Ollama</li>
 						<li>Open settings (gear icon) &rarr; AI tab &rarr; Refresh Models</li>
 						<li>Start chatting!</li>
 					</ol>
