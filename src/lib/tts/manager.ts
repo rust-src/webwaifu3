@@ -1,7 +1,8 @@
 import { phonemize } from 'phonemizer';
 import { isKokoroReady, generateSpeechBlob, KOKORO_VOICES, type KokoroVoice } from './kokoro.js';
 
-const TTS_WORKER_URL = new URL('./tts-worker.ts', import.meta.url);
+// NOTE: Worker URL must be inline in `new Worker()` call so Vite
+// recognizes the pattern and bundles the worker as a proper JS file.
 
 export interface LipSyncData {
 	wordBoundaries: WordBoundary[];
@@ -258,7 +259,7 @@ export class TtsManager {
 			window.dispatchEvent(new CustomEvent('kokoro-tts-status', { detail: 'Already initialized' }));
 			return;
 		}
-		this.ttsWorker = new Worker(TTS_WORKER_URL, { type: 'module' });
+		this.ttsWorker = new Worker(new URL('./tts-worker.ts', import.meta.url), { type: 'module' });
 		this.ttsWorker.onmessage = (e: MessageEvent) => this._onTtsWorkerMessage(e);
 		this.ttsWorker.onerror = (err) => {
 			this.kokoroReadyInWorker = false;
