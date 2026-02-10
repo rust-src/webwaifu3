@@ -194,9 +194,9 @@
 				const providerDefaults = await storage.getSetting('manager.providerDefaults', {});
 				if (providerDefaults[llmSettings.provider]) {
 					const d = providerDefaults[llmSettings.provider];
-					if (d.apiKey) llmSettings.apiKey = d.apiKey;
-					if (d.endpoint) llmSettings.endpoint = d.endpoint;
-					if (d.model) llmSettings.model = d.model;
+					llmSettings.apiKey = d.apiKey ?? llmSettings.apiKey;
+					llmSettings.endpoint = d.endpoint ?? llmSettings.endpoint;
+					llmSettings.model = d.model ?? llmSettings.model;
 				}
 				if (state.tts) {
 					ttsSettings.provider = state.tts.provider;
@@ -444,22 +444,25 @@
 			const url = typeof detail === 'string' ? detail : detail.url;
 			const fileData: ArrayBuffer | undefined = detail.fileData;
 			const previousUrl = vrmState.vrmUrl;
-			vrmCanvas?.loadVrmFromUrl(url);
-			if (previousUrl !== url) {
-				revokeBlobUrl(previousUrl);
-			}
+			vrmCanvas?.loadVrmFromUrl(url).then(() => {
+				// Only revoke old blob after new VRM loaded successfully
+				if (previousUrl !== url) {
+					revokeBlobUrl(previousUrl);
+				}
+				vrmState.vrmUrl = url;
 
-			// Persist VRM choice
-			if (fileData) {
-				// User loaded from file — store bytes in IndexedDB
-				storage.saveVrmFile(fileData);
-				storage.setSetting('vrmUrl', 'idb://vrmFile');
-			} else {
-				// Built-in or remote URL
-				storage.clearVrmFile();
-				storage.setSetting('vrmUrl', url);
-			}
-			vrmState.vrmUrl = url;
+				// Persist VRM choice
+				if (fileData) {
+					storage.saveVrmFile(fileData);
+					storage.setSetting('vrmUrl', 'idb://vrmFile');
+				} else {
+					storage.clearVrmFile();
+					storage.setSetting('vrmUrl', url);
+				}
+			}).catch((err) => {
+				console.error('[VRM] Failed to load:', err);
+				toast('Failed to load VRM model');
+			});
 		}
 
 		function onLoadAnim(e: Event) {
