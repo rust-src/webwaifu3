@@ -18,6 +18,8 @@
 	let sceneRefs: SceneRefs;
 	let ppRefs: PostProcessingRefs;
 	const scaleLimits = { min: 0.25, max: 4.0 };
+	let rafId: number | null = null;
+	let disposed = false;
 
 	function hasActivePass(pp: PostProcessingRefs): boolean {
 		return pp.bloomPass.enabled || pp.fxaaPass.enabled || pp.smaaPass.enabled ||
@@ -87,11 +89,13 @@
 	}
 
 	onMount(() => {
+		disposed = false;
 		sceneRefs = createScene(canvasEl);
 		ppRefs = initPostProcessing(sceneRefs.renderer, sceneRefs.scene, sceneRefs.camera);
 
 		function animate() {
-			requestAnimationFrame(animate);
+			if (disposed) return;
+			rafId = requestAnimationFrame(animate);
 			const delta = sceneRefs.clock.getDelta();
 
 			if (vrmState.vrm) {
@@ -139,6 +143,11 @@
 		canvasEl.addEventListener('wheel', onWheel, { passive: false });
 
 		return () => {
+			disposed = true;
+			if (rafId !== null) {
+				cancelAnimationFrame(rafId);
+				rafId = null;
+			}
 			window.removeEventListener('resize', onResize);
 			canvasEl.removeEventListener('wheel', onWheel);
 			// Dispose VRM before renderer

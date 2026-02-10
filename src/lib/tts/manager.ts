@@ -69,7 +69,7 @@ export class TtsManager {
 
 	audioAnalyser: AnalyserNode | null = null;
 	audioSource: MediaElementAudioSourceNode | null = null;
-	audioDataArray: Uint8Array | null = null;
+	audioDataArray: Uint8Array<ArrayBuffer> | null = null;
 
 	onSpeechStarted: (() => void) | null = null;
 	onSpeechFinished: (() => void) | null = null;
@@ -86,7 +86,7 @@ export class TtsManager {
 		this.audioAnalyser = this.audioContext.createAnalyser();
 		this.audioAnalyser.fftSize = 128;
 		this.audioAnalyser.smoothingTimeConstant = 0.05;
-		this.audioDataArray = new Uint8Array(this.audioAnalyser.frequencyBinCount);
+		this.audioDataArray = new Uint8Array(this.audioAnalyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
 		this.startTtsWorker();
 		console.log('[TtsManager] Initialized with lip sync support');
 	}
@@ -121,11 +121,20 @@ export class TtsManager {
 				if (!this._fishTextController) {
 					this._startFishStreamSession();
 				}
+				if (!this._fishTextController) {
+					this.onError?.(
+						new Error('Fish stream unavailable (missing API key or failed stream init)')
+					);
+					continue;
+				}
 
 				// Send this sentence to Fish via the streaming body
-				this._fishTextController!.write(
-					this._fishTextEncoder.encode(cleaned + ' ')
-				);
+				void this._fishTextController
+					.write(this._fishTextEncoder.encode(cleaned + ' '))
+					.catch((err) => {
+						const e = err instanceof Error ? err : new Error(String(err));
+						this.onError?.(e);
+					});
 			}
 
 			if (isFinal) {
@@ -134,7 +143,9 @@ export class TtsManager {
 
 				// Close the text stream — Fish will finish processing and send remaining audio
 				if (this._fishTextController) {
-					this._fishTextController.close();
+					void this._fishTextController.close().catch(() => {
+						// Stream may already be closed/canceled; ignore.
+					});
 					this._fishTextController = null;
 				}
 
@@ -194,7 +205,9 @@ export class TtsManager {
 
 		// Close any active Fish text stream
 		if (this._fishTextController) {
-			try { this._fishTextController.close(); } catch { /* already closed */ }
+			void this._fishTextController.close().catch(() => {
+				// already closed
+			});
 			this._fishTextController = null;
 		}
 		this._fishAudioPromise = null;

@@ -12,6 +12,11 @@ export interface ModelInfo {
 	name: string;
 }
 
+export type ChatMessage = {
+	role: 'system' | 'user' | 'assistant';
+	content: string;
+};
+
 export class LlmClient {
 	provider: LlmProvider = 'ollama';
 	apiKey = '';
@@ -29,7 +34,7 @@ export class LlmClient {
 	onStreamChunk: ((delta: string) => void) | null = null;
 	onError: ((error: Error) => void) | null = null;
 
-	_buildMessages(userMessage: string) {
+	_buildMessages(userMessage: string): ChatMessage[] {
 		return [
 			{ role: 'system' as const, content: this.systemPrompt || '' },
 			{ role: 'user' as const, content: userMessage }
@@ -130,17 +135,17 @@ export class LlmClient {
 	async generateResponse(
 		userMessage: string,
 		onStreamToken?: ((delta: string) => void) | null,
-		opts: { signal?: AbortSignal; collectFullResponse?: boolean; contextMessages?: { role: string; content: string }[] } = {}
+		opts: { signal?: AbortSignal; collectFullResponse?: boolean; contextMessages?: ChatMessage[] } = {}
 	) {
 		const { signal, collectFullResponse = true, contextMessages } = opts;
 		const model = this._resolveModel();
-		const messages = contextMessages || this._buildMessages(userMessage);
+		const messages: ChatMessage[] = contextMessages || this._buildMessages(userMessage);
 		let streamedText = '';
 
 		try {
 			const result = await streamText({
 				model,
-				messages,
+				messages: messages as any,
 				temperature: this.temperature,
 				maxOutputTokens: this.maxTokens,
 				abortSignal: signal

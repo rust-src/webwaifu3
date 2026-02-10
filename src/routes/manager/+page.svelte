@@ -102,9 +102,9 @@
 			const activeProvider = await storage.getSetting('llm.provider', 'ollama');
 			const activeDefaults = providerDefaults[activeProvider];
 			if (activeDefaults) {
-				if (activeDefaults.apiKey) await storage.setSetting('llm.apiKey', activeDefaults.apiKey);
-				if (activeDefaults.endpoint) await storage.setSetting('llm.endpoint', activeDefaults.endpoint);
-				if (activeDefaults.model) await storage.setSetting('llm.model', activeDefaults.model);
+				await storage.setSetting('llm.apiKey', activeDefaults.apiKey ?? '');
+				await storage.setSetting('llm.endpoint', activeDefaults.endpoint ?? '');
+				await storage.setSetting('llm.model', activeDefaults.model ?? '');
 			}
 
 			await storage.setSetting('tts.fishApiKey', fishApiKey);

@@ -8,6 +8,11 @@ env.allowLocalModels = false;
 let embedder: FeatureExtractionPipeline | null = null;
 let isInitializing = false;
 const MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
+const createFeatureExtractionPipeline = pipeline as unknown as (
+	task: 'feature-extraction',
+	model: string,
+	options?: Record<string, unknown>
+) => Promise<FeatureExtractionPipeline>;
 
 async function initializeModel() {
 	if (embedder || isInitializing) return;
@@ -16,7 +21,7 @@ async function initializeModel() {
 	console.log('[EmbeddingWorker] Loading model:', MODEL_NAME);
 
 	try {
-		embedder = await pipeline('feature-extraction', MODEL_NAME, {
+		embedder = await createFeatureExtractionPipeline('feature-extraction', MODEL_NAME, {
 			// @ts-ignore - cache option
 			cache: 'force-cache'
 		});

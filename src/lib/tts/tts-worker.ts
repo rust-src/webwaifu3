@@ -8,6 +8,8 @@
 /// <reference lib="webworker" />
 
 export type KokoroVoice = string;
+type KokoroDtype = 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
+type KokoroDevice = 'webgpu' | 'wasm' | 'cpu' | null;
 
 function samplesToWavBlob(floatSamples: Float32Array, sampleRate: number): Blob {
 	const samples = new Int16Array(floatSamples.length);
@@ -48,7 +50,7 @@ self.onmessage = async (e: MessageEvent) => {
 		text?: string;
 		voice?: KokoroVoice;
 		speed?: number;
-		options?: { dtype?: string; device?: string | null; onProgress?: (p: unknown) => void };
+		options?: { dtype?: KokoroDtype; device?: KokoroDevice; onProgress?: (p: unknown) => void };
 	};
 
 	if (type === 'init') {

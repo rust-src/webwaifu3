@@ -27,6 +27,7 @@
 	import { getAnimationSequencer, DEFAULT_ANIMATIONS } from '$lib/vrm/sequencer.js';
 	import { getMemoryManager } from '$lib/memory/manager.js';
 	import { getSttRecorder } from '$lib/stt/recorder.js';
+	import type { ChatMessage } from '$lib/llm/client.js';
 
 	const chat = getChat();
 	const vrmState = getVrmState();
@@ -45,6 +46,23 @@
 
 	let vrmCanvas: VrmCanvas;
 	const storage = getStorageManager();
+
+	function revokeBlobUrl(url: string | null | undefined) {
+		if (url && url.startsWith('blob:')) {
+			try {
+				URL.revokeObjectURL(url);
+			} catch {
+				// ignore invalid/expired URL revocation
+			}
+		}
+	}
+
+	function toChatMessage(message: { role: string; content: string }): ChatMessage | null {
+		if (message.role === 'system' || message.role === 'user' || message.role === 'assistant') {
+			return { role: message.role, content: message.content };
+		}
+		return null;
+	}
 
 	// Initialize playlist on first load
 	if (seqState.playlist.length === 0) {
@@ -121,14 +139,17 @@
 			}
 
 			// Build context with memory system if enabled
-			let contextMessages: { role: string; content: string }[] | undefined;
+			let contextMessages: ChatMessage[] | undefined;
 			if (memState.enabled && memoryManager.modelReady) {
 				try {
-					contextMessages = await memoryManager.buildContext(
+					const rawContextMessages = await memoryManager.buildContext(
 						message,
 						chat.history.slice(0, -1), // exclude the user message we just added
 						chars.current?.systemPrompt ?? ''
 					);
+					contextMessages = rawContextMessages
+						.map(toChatMessage)
+						.filter((m): m is ChatMessage => m !== null);
 					// Embed the user message
 					const currentConvoId = await storage.getSetting('currentConversationId');
 					if (currentConvoId) {
@@ -374,19 +395,27 @@
 					if (fileData) {
 						const blob = new Blob([fileData], { type: 'application/octet-stream' });
 						const blobUrl = URL.createObjectURL(blob);
+						revokeBlobUrl(vrmState.vrmUrl);
 						vrmCanvas?.loadVrmFromUrl(blobUrl);
 						vrmState.vrmUrl = blobUrl;
 					} else {
+						revokeBlobUrl(vrmState.vrmUrl);
 						vrmCanvas?.loadVrmFromUrl('/assets/hikkyc2.vrm');
+						vrmState.vrmUrl = '/assets/hikkyc2.vrm';
 					}
 				} else {
+					if (savedVrmUrl !== vrmState.vrmUrl) {
+						revokeBlobUrl(vrmState.vrmUrl);
+					}
 					vrmCanvas?.loadVrmFromUrl(savedVrmUrl);
 					vrmState.vrmUrl = savedVrmUrl;
 				}
 			} catch (e) {
 				console.error('Failed to load settings:', e);
 				// Fallback: load default VRM
+				revokeBlobUrl(vrmState.vrmUrl);
 				vrmCanvas?.loadVrmFromUrl('/assets/hikkyc2.vrm');
+				vrmState.vrmUrl = '/assets/hikkyc2.vrm';
 			}
 			// Auto-fetch models for configured providers
 			if (models.models.length === 0) {
@@ -414,7 +443,11 @@
 			const detail = (e as CustomEvent).detail;
 			const url = typeof detail === 'string' ? detail : detail.url;
 			const fileData: ArrayBuffer | undefined = detail.fileData;
+			const previousUrl = vrmState.vrmUrl;
 			vrmCanvas?.loadVrmFromUrl(url);
+			if (previousUrl !== url) {
+				revokeBlobUrl(previousUrl);
+			}
 
 			// Persist VRM choice
 			if (fileData) {
@@ -543,11 +576,13 @@
 			window.removeEventListener('nethoe:sequencer-stop', onSeqStop);
 			window.removeEventListener('nethoe:sequencer-play-one', onSeqPlayOne);
 			sequencer.stop();
+			revokeBlobUrl(vrmState.vrmUrl);
 		};
 	});
 
 	// Auto-save settings when they change (debounced to avoid excessive IDB writes)
 	let saveTimer: ReturnType<typeof setTimeout> | null = null;
+	let saveChain: Promise<void> = Promise.resolve();
 	$effect(() => {
 		// IMPORTANT: Read ALL reactive deps FIRST, before any non-reactive guard.
 		// storage.db is NOT reactive ($state), so if we return early before reading
@@ -629,22 +664,38 @@
 
 		// Debounce: wait 500ms after last change before writing to IndexedDB
 		if (saveTimer) clearTimeout(saveTimer);
-		saveTimer = setTimeout(async () => {
-			await storage.saveAppState(snapshot);
+		saveTimer = setTimeout(() => {
+			// Serialize async saves so older writes cannot finish after newer ones.
+			saveChain = saveChain
+				.catch(() => {
+					// keep queue alive after a failed write
+				})
+				.then(async () => {
+					await storage.saveAppState(snapshot);
 
-			// Sync active LLM settings back to manager.providerDefaults
-			// so Manager page always shows the correct keys per provider
-			try {
-				const defaults = await storage.getSetting('manager.providerDefaults', {});
-				const provider = snapshot.llm.provider;
-				defaults[provider] = {
-					model: snapshot.llm.model || defaults[provider]?.model || '',
-					apiKey: snapshot.llm.apiKey || defaults[provider]?.apiKey || '',
-					endpoint: snapshot.llm.endpoint || defaults[provider]?.endpoint || ''
-				};
-				await storage.setSetting('manager.providerDefaults', defaults);
-			} catch { /* non-critical */ }
+					// Sync active LLM settings back to manager.providerDefaults.
+					// Persist explicit empty strings so clearing credentials actually sticks.
+					try {
+						const defaults = await storage.getSetting('manager.providerDefaults', {});
+						const provider = snapshot.llm.provider;
+						defaults[provider] = {
+							model: snapshot.llm.model ?? '',
+							apiKey: snapshot.llm.apiKey ?? '',
+							endpoint: snapshot.llm.endpoint ?? ''
+						};
+						await storage.setSetting('manager.providerDefaults', defaults);
+					} catch {
+						/* non-critical */
+					}
+				});
 		}, 500);
+
+		return () => {
+			if (saveTimer) {
+				clearTimeout(saveTimer);
+				saveTimer = null;
+			}
+		};
 	});
 
 	function handleClickOutside() {

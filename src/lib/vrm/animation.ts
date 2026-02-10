@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import { gltfLoader } from './loader.js';
 
 // Mixamo to VRM humanoid bone map (from three-vrm examples)
-export const mixamoVRMRigMap: Record<string, string> = {
+export const mixamoVRMRigMap: Partial<Record<string, VRMHumanBoneName>> = {
 	mixamorigHips: 'hips',
 	mixamorigSpine: 'spine',
 	mixamorigSpine1: 'chest',
@@ -15,8 +15,8 @@ export const mixamoVRMRigMap: Record<string, string> = {
 	mixamorigLeftArm: 'leftUpperArm',
 	mixamorigLeftForeArm: 'leftLowerArm',
 	mixamorigLeftHand: 'leftHand',
-	mixamorigLeftHandThumb1: 'leftThumbProximal',
-	mixamorigLeftHandThumb2: 'leftThumbIntermediate',
+	mixamorigLeftHandThumb1: 'leftThumbMetacarpal',
+	mixamorigLeftHandThumb2: 'leftThumbProximal',
 	mixamorigLeftHandThumb3: 'leftThumbDistal',
 	mixamorigLeftHandIndex1: 'leftIndexProximal',
 	mixamorigLeftHandIndex2: 'leftIndexIntermediate',
@@ -34,8 +34,8 @@ export const mixamoVRMRigMap: Record<string, string> = {
 	mixamorigRightArm: 'rightUpperArm',
 	mixamorigRightForeArm: 'rightLowerArm',
 	mixamorigRightHand: 'rightHand',
-	mixamorigRightHandThumb1: 'rightThumbProximal',
-	mixamorigRightHandThumb2: 'rightThumbIntermediate',
+	mixamorigRightHandThumb1: 'rightThumbMetacarpal',
+	mixamorigRightHandThumb2: 'rightThumbProximal',
 	mixamorigRightHandThumb3: 'rightThumbDistal',
 	mixamorigRightHandIndex1: 'rightIndexProximal',
 	mixamorigRightHandIndex2: 'rightIndexIntermediate',
@@ -110,6 +110,7 @@ export async function loadMixamoAnimation(
 		const trackSplitted = track.name.split('.');
 		const mixamoRigName = trackSplitted[0];
 		const vrmBoneName = mixamoVRMRigMap[mixamoRigName];
+		if (!vrmBoneName) return;
 		const vrmNodeName = vrm.humanoid?.getNormalizedBoneNode(vrmBoneName)?.name;
 		const mixamoRigNode = asset.getObjectByName(mixamoRigName);
 

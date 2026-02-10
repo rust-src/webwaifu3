@@ -163,10 +163,8 @@ export function initPostProcessing(
 	fxaaPass.enabled = false;
 	composer.addPass(fxaaPass);
 
-	const smaaPass = new SMAAPass(
-		window.innerWidth * pixelRatio,
-		window.innerHeight * pixelRatio
-	);
+	const smaaPass = new SMAAPass();
+	smaaPass.setSize(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio);
 	smaaPass.enabled = false;
 	composer.addPass(smaaPass);
 

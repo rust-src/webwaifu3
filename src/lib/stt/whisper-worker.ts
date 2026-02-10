@@ -9,6 +9,11 @@ env.allowLocalModels = false;
 let transcriber: AutomaticSpeechRecognitionPipeline | null = null;
 let isInitializing = false;
 const MODEL_NAME = 'Xenova/whisper-tiny.en';
+const createAsrPipeline = pipeline as unknown as (
+	task: 'automatic-speech-recognition',
+	model: string,
+	options?: Record<string, unknown>
+) => Promise<AutomaticSpeechRecognitionPipeline>;
 
 async function initializeWhisperModel() {
 	if (transcriber || isInitializing) return;
@@ -17,7 +22,7 @@ async function initializeWhisperModel() {
 	console.log('[Worker] Initializing Whisper model...');
 
 	try {
-		transcriber = await pipeline('automatic-speech-recognition', MODEL_NAME, {
+		transcriber = await createAsrPipeline('automatic-speech-recognition', MODEL_NAME, {
 			// @ts-ignore - cache option
 			cache: 'force-cache'
 		});
