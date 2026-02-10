@@ -8,6 +8,7 @@
 	let name = $state('');
 	let systemPrompt = $state('');
 	let description = $state('');
+	let userNickname = $state('');
 	let importInput: HTMLInputElement;
 
 	$effect(() => {
@@ -29,12 +30,13 @@
 		name = c.name;
 		systemPrompt = c.systemPrompt;
 		description = c.description ?? '';
+		userNickname = c.userNickname ?? '';
 		if (c.id && storage.db) storage.setActiveCharacter(c.id);
 	}
 
 	async function saveCharacter() {
 		if (!storage.db || !name.trim()) return toast('Enter a character name');
-		const data = { name: name.trim(), systemPrompt, description };
+		const data = { name: name.trim(), systemPrompt, description, userNickname };
 		if (chars.current?.id) {
 			await storage.saveCharacter({ ...data, id: chars.current.id });
 			toast('Character updated');
@@ -50,6 +52,7 @@
 		name = '';
 		systemPrompt = '';
 		description = '';
+		userNickname = '';
 	}
 
 	async function deleteCharacter() {
@@ -62,7 +65,7 @@
 
 	function exportCharacter() {
 		if (!chars.current) return toast('No character selected');
-		const json = JSON.stringify({ name, systemPrompt, description }, null, 2);
+		const json = JSON.stringify({ name, systemPrompt, description, userNickname }, null, 2);
 		const blob = new Blob([json], { type: 'application/json' });
 		const a = document.createElement('a');
 		a.href = URL.createObjectURL(blob);
@@ -81,6 +84,7 @@
 				name = data.name || '';
 				systemPrompt = data.systemPrompt || '';
 				description = data.description || '';
+				userNickname = data.userNickname || '';
 				chars.current = null;
 				toast('Character imported - click Save');
 			} catch {
@@ -119,6 +123,11 @@
 <div class="control-group">
 	<div class="control-label">Description (optional)</div>
 	<input type="text" class="input-tech" bind:value={description} placeholder="Brief description..." />
+</div>
+
+<div class="control-group">
+	<div class="control-label">User Nickname (for replies)</div>
+	<input type="text" class="input-tech" bind:value={userNickname} placeholder="How AI should address you..." />
 </div>
 
 <div class="btn-row">

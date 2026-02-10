@@ -26,7 +26,8 @@
 				<section class="splash-section warn">
 					<h2>Before You Start</h2>
 					<ul>
-						<li><strong>LLM Required</strong> &mdash; You need either a local model server (<strong>Ollama</strong> or <strong>LM Studio</strong>) or a cloud API key (<strong>OpenAI</strong> / <strong>OpenRouter</strong>).</li>
+						<li><strong>BYOK (Bring Your Own Key)</strong> &mdash; WEBWAIFU 3 does not include hosted cloud credits or bundled API keys. For cloud chat/TTS, you must use your own provider key(s).</li>
+						<li><strong>LLM Required</strong> &mdash; You need either a local model server (<strong>Ollama</strong> or <strong>LM Studio</strong>) or your own cloud API key (<strong>OpenAI</strong> / <strong>OpenRouter</strong>).</li>
 						<li><strong>Ollama Network Access</strong> &mdash; In Ollama's settings, enable <strong>"Allow through network"</strong> so the browser can reach it. You also need to set allowed origins: set the environment variable <code>OLLAMA_ORIGINS=*</code> (or add your app's URL) before running <code>ollama serve</code>. On Windows, set it in System Environment Variables and restart Ollama.</li>
 						<li><strong>LM Studio CORS</strong> &mdash; Enable CORS in the LM Studio server settings.</li>
 						<li><strong>API Keys are Stored Locally</strong> &mdash; All API keys (LLM, TTS) are saved in your browser's IndexedDB. They never leave your machine except when sent directly to the provider APIs.</li>
@@ -58,7 +59,7 @@
 				<label class="splash-ack-row">
 					<input type="checkbox" bind:checked={accepted} />
 					<span>
-						I agree / I accept that WEBWAIFU 3 needs either local AI (Ollama or LM Studio) or cloud API keys (OpenAI/OpenRouter) to generate responses.
+						I agree / I accept that WEBWAIFU 3 is BYOK for cloud providers, and requires either local AI (Ollama/LM Studio) or my own cloud API keys to generate responses.
 					</span>
 				</label>
 			</div>

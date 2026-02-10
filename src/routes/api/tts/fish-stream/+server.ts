@@ -129,22 +129,48 @@ async function runWebSocketSession(
 		const stream = new ReadableStream({
 			start(controller) {
 				let chunkCount = 0;
+				let streamEnded = false;
+
+				const safeClose = () => {
+					if (streamEnded) return;
+					streamEnded = true;
+					try {
+						controller.close();
+					} catch {
+						// Ignore invalid state if stream has already transitioned.
+					}
+				};
+
+				const safeError = (error: Error) => {
+					if (streamEnded) return;
+					streamEnded = true;
+					try {
+						controller.error(error);
+					} catch {
+						// Ignore invalid state if stream has already transitioned.
+					}
+				};
 
 				connection.on(RealtimeEvents.AUDIO_CHUNK, (data: unknown) => {
 					if (data instanceof Uint8Array || Buffer.isBuffer(data)) {
-						controller.enqueue(new Uint8Array(data));
-						chunkCount++;
+						if (streamEnded) return;
+						try {
+							controller.enqueue(new Uint8Array(data));
+							chunkCount++;
+						} catch {
+							// Ignore enqueue after stream closure.
+						}
 					}
 				});
 
 				connection.on(RealtimeEvents.ERROR, (err: unknown) => {
 					console.error('[Fish Stream] WebSocket error:', err);
-					controller.error(err instanceof Error ? err : new Error(String(err)));
+					safeError(err instanceof Error ? err : new Error(String(err)));
 				});
 
 				connection.on(RealtimeEvents.CLOSE, () => {
 					console.log(`[Fish Stream] Session complete: ${chunkCount} audio chunks streamed`);
-					controller.close();
+					safeClose();
 				});
 			}
 		});
@@ -153,8 +179,10 @@ async function runWebSocketSession(
 			headers: { 'Content-Type': ct }
 		});
 	} catch (err: any) {
-		console.error('[Fish Stream] Error:', err.message);
-		return json({ error: err.message || 'Fish Audio WebSocket TTS failed' }, { status: 500 });
+		const message = err?.message || 'Fish Audio WebSocket TTS failed';
+		const status = /(?:^|\\s|:)429(?:\\b|$)/.test(message) ? 429 : 500;
+		console.error('[Fish Stream] Error:', message);
+		return json({ error: message }, { status });
 	}
 }
 

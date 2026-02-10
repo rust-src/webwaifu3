@@ -234,6 +234,7 @@ interface Character {
 	name: string;
 	systemPrompt: string;
 	description?: string;
+	userNickname?: string;
 }
 
 let currentCharacter = $state<Character | null>(null);

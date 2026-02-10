@@ -64,6 +64,16 @@
 		return null;
 	}
 
+	function getEffectiveSystemPrompt(): string {
+		const base = chars.current?.systemPrompt?.trim() ?? '';
+		const nickname = chars.current?.userNickname?.trim();
+		if (!nickname) return base;
+
+		const nicknameInstruction =
+			`The user's preferred name is "${nickname}". Address them by this name naturally when appropriate.`;
+		return base ? `${base}\n\n${nicknameInstruction}` : nicknameInstruction;
+	}
+
 	async function loadAndCommitVrm(url: string): Promise<boolean> {
 		const previousUrl = vrmState.vrmUrl;
 		const loaded = await vrmCanvas?.loadVrmFromUrl(url);
@@ -89,11 +99,12 @@
 
 		try {
 			const client = getLlmClient();
+			const effectiveSystemPrompt = getEffectiveSystemPrompt();
 			client.provider = llmSettings.provider;
 			client.model = llmSettings.model;
 			client.apiKey = llmSettings.apiKey;
 			client.endpoint = llmSettings.endpoint;
-			client.systemPrompt = chars.current?.systemPrompt ?? '';
+			client.systemPrompt = effectiveSystemPrompt;
 			client.temperature = llmSettings.temperature;
 			client.maxTokens = llmSettings.maxTokens;
 			client.numCtx = llmSettings.numCtx;
@@ -156,7 +167,7 @@
 					const rawContextMessages = await memoryManager.buildContext(
 						message,
 						chat.history.slice(0, -1), // exclude the user message we just added
-						chars.current?.systemPrompt ?? ''
+						effectiveSystemPrompt
 					);
 					contextMessages = rawContextMessages
 						.map(toChatMessage)
@@ -784,4 +795,3 @@
 		transform: scale(1.05);
 	}
 </style>
-
