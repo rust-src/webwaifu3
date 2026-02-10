@@ -56,9 +56,9 @@
 		try {
 			const defaults = await storage.getSetting('manager.providerDefaults', {});
 			const d = defaults[newProvider];
-			llm.apiKey = d?.apiKey || '';
-			llm.endpoint = d?.endpoint || DEFAULT_ENDPOINTS[newProvider] || '';
-			llm.model = d?.model || '';
+			llm.apiKey = d?.apiKey ?? '';
+			llm.endpoint = d?.endpoint ?? DEFAULT_ENDPOINTS[newProvider] ?? '';
+			llm.model = d?.model ?? '';
 		} catch {
 			llm.apiKey = '';
 			llm.endpoint = DEFAULT_ENDPOINTS[newProvider] || '';

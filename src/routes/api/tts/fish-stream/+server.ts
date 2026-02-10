@@ -94,7 +94,7 @@ interface SessionConfig {
 	latency?: string;
 }
 
-/** Shared: opens one Fish WebSocket session, collects audio, returns response */
+/** Shared: opens one Fish WebSocket session, streams audio chunks to client in real-time */
 async function runWebSocketSession(
 	client: FishAudioClient,
 	textStream: AsyncGenerator<string>,
@@ -111,6 +111,13 @@ async function runWebSocketSession(
 		prosody: { speed: 1.0, volume: 0.0 }
 	};
 
+	const ct =
+		config.format === 'wav'
+			? 'audio/wav'
+			: config.format === 'opus'
+				? 'audio/opus'
+				: 'audio/mpeg';
+
 	try {
 		const connection = await client.textToSpeech.convertRealtime(
 			ttsRequest,
@@ -118,51 +125,32 @@ async function runWebSocketSession(
 			(config.model || 's1') as Backends
 		);
 
-		const audioChunks: Buffer[] = [];
+		// Stream audio chunks to client as they arrive from Fish WebSocket
+		const stream = new ReadableStream({
+			start(controller) {
+				let chunkCount = 0;
 
-		await new Promise<void>((resolve, reject) => {
-			let resolved = false;
+				connection.on(RealtimeEvents.AUDIO_CHUNK, (data: unknown) => {
+					if (data instanceof Uint8Array || Buffer.isBuffer(data)) {
+						controller.enqueue(new Uint8Array(data));
+						chunkCount++;
+					}
+				});
 
-			connection.on(RealtimeEvents.AUDIO_CHUNK, (data: unknown) => {
-				if (data instanceof Uint8Array || Buffer.isBuffer(data)) {
-					audioChunks.push(Buffer.from(data));
-				}
-			});
+				connection.on(RealtimeEvents.ERROR, (err: unknown) => {
+					console.error('[Fish Stream] WebSocket error:', err);
+					controller.error(err instanceof Error ? err : new Error(String(err)));
+				});
 
-			connection.on(RealtimeEvents.ERROR, (err: unknown) => {
-				if (!resolved) {
-					resolved = true;
-					reject(err instanceof Error ? err : new Error(String(err)));
-				}
-			});
-
-			connection.on(RealtimeEvents.CLOSE, () => {
-				if (!resolved) {
-					resolved = true;
-					resolve();
-				}
-			});
+				connection.on(RealtimeEvents.CLOSE, () => {
+					console.log(`[Fish Stream] Session complete: ${chunkCount} audio chunks streamed`);
+					controller.close();
+				});
+			}
 		});
 
-		if (audioChunks.length === 0) {
-			return json({ error: 'No audio received from Fish Audio' }, { status: 500 });
-		}
-
-		console.log(`[Fish Stream] Session complete: ${audioChunks.length} audio chunks`);
-
-		const audioBuffer = Buffer.concat(audioChunks);
-		const ct =
-			config.format === 'wav'
-				? 'audio/wav'
-				: config.format === 'opus'
-					? 'audio/opus'
-					: 'audio/mpeg';
-
-		return new Response(audioBuffer, {
-			headers: {
-				'Content-Type': ct,
-				'Content-Length': audioBuffer.length.toString()
-			}
+		return new Response(stream, {
+			headers: { 'Content-Type': ct }
 		});
 	} catch (err: any) {
 		console.error('[Fish Stream] Error:', err.message);

@@ -167,10 +167,10 @@
 	export function getSceneRefs() { return sceneRefs; }
 	export function getPostProcessingRefs() { return ppRefs; }
 
-	export async function loadVrmFromUrl(url: string) {
+	export async function loadVrmFromUrl(url: string): Promise<boolean> {
 		await ensureSceneInitialized();
 		const rt = await ensureRuntime();
-		if (!sceneRefs) return;
+		if (!sceneRefs) return false;
 
 		try {
 			if (vrmState.vrm) {
@@ -191,9 +191,11 @@
 					window.dispatchEvent(new CustomEvent('webwaifu3:sequencer-start'));
 				}
 			}, 500);
+			return true;
 		} catch (err: any) {
 			console.error(err);
 			toast('Failed to load VRM: ' + err.message);
+			return false;
 		}
 	}
 

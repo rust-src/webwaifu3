@@ -21,7 +21,7 @@
 		toast,
 		addLog
 	} from '$lib/stores/app.svelte.js';
-	import { LlmClient } from '$lib/llm/client.js';
+	import { getLlmClient } from '$lib/llm/client.js';
 	import { getTtsManager } from '$lib/tts/manager.js';
 	import { getStorageManager } from '$lib/storage/index.js';
 	import { getAnimationSequencer, DEFAULT_ANIMATIONS } from '$lib/vrm/sequencer.js';
@@ -77,7 +77,7 @@
 		addLog(`User: ${message.slice(0, 60)}...`, 'info');
 
 		try {
-			const client = new LlmClient();
+			const client = getLlmClient();
 			client.provider = llmSettings.provider;
 			client.model = llmSettings.model;
 			client.apiKey = llmSettings.apiKey;
@@ -419,7 +419,7 @@
 			}
 			// Auto-fetch models for configured providers
 			if (models.models.length === 0) {
-				const client = new LlmClient();
+				const client = getLlmClient();
 				client.provider = llmSettings.provider;
 				client.apiKey = llmSettings.apiKey;
 				client.endpoint = llmSettings.endpoint;

@@ -38,6 +38,7 @@ export class MemoryManager {
 
 	private _pendingRequests = new Map<string, { resolve: (v: any) => void; reject: (e: any) => void }>();
 	private _requestId = 0;
+	private _embeddingCache: EmbeddingEntry[] | null = null;
 
 	private _createWorker() {
 		if (this.worker) return;
@@ -138,21 +139,30 @@ export class MemoryManager {
 		return this._postAndWait<Float32Array>({ type: 'embed-text', data: { text } });
 	}
 
+	/** Pre-load all embeddings from IndexedDB into memory for fast similarity search */
+	async preloadEmbeddings() {
+		const storage = getStorageManager();
+		this._embeddingCache = await storage.getAllEmbeddings();
+	}
+
 	async addMessage(role: string, content: string, conversationId: number, messageIndex: number) {
 		if (!this.enabled || !this.modelReady) return;
 		if (!content.trim()) return;
 
 		try {
 			const vector = await this.embedText(content);
-			const storage = getStorageManager();
-			await storage.saveEmbedding({
+			const entry: EmbeddingEntry = {
 				conversationId,
 				messageIndex,
 				role,
 				text: content,
 				vector,
 				timestamp: Date.now()
-			});
+			};
+			const storage = getStorageManager();
+			await storage.saveEmbedding(entry);
+			// Append to cache so next search sees it without a full reload
+			if (this._embeddingCache) this._embeddingCache.push(entry);
 		} catch (e) {
 			console.error('[MemoryManager] Failed to embed message:', e);
 		}
@@ -162,8 +172,13 @@ export class MemoryManager {
 		if (!this.modelReady) return [];
 
 		const queryVector = await this.embedText(query);
-		const storage = getStorageManager();
-		const allEmbeddings = await storage.getAllEmbeddings();
+		// Use cache if available, otherwise load from IndexedDB
+		const allEmbeddings = this._embeddingCache ?? await (async () => {
+			const storage = getStorageManager();
+			const entries = await storage.getAllEmbeddings();
+			this._embeddingCache = entries;
+			return entries;
+		})();
 
 		if (allEmbeddings.length === 0) return [];
 

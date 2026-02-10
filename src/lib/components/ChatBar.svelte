@@ -1,12 +1,15 @@
 <script lang="ts">
-	import { getChat, getLlmSettings, getSttState, toast, addLog } from '../stores/app.svelte.js';
+	import { getChat, getLlmSettings, getSttState, getMemoryState, toast, addLog } from '../stores/app.svelte.js';
 	import { getSttRecorder } from '../stt/recorder.js';
+	import { getMemoryManager } from '../memory/manager.js';
 
 	let { onsend }: { onsend: (message: string) => void } = $props();
 	const chat = getChat();
 	const llm = getLlmSettings();
 	const stt = getSttState();
+	const memState = getMemoryState();
 	const recorder = getSttRecorder();
+	const memoryManager = getMemoryManager();
 
 	let textareaEl: HTMLTextAreaElement;
 
@@ -27,6 +30,11 @@
 		};
 		recorder.onTranscript = (text) => {
 			addLog(`STT transcript: "${text.slice(0, 60)}"`, 'info');
+		};
+		// Silence detection auto-stop: same flow as manual stop
+		recorder.onAutoStop = () => {
+			if (!stt.recording) return;
+			handleMicClick();
 		};
 	}
 
@@ -84,7 +92,12 @@
 			return;
 		}
 
-		// Start recording
+		// Enable silence detection when autoSend is active
+		recorder.silenceDetection = stt.autoSend;
+		// Pre-warm embedding cache while user speaks (anticipating a query)
+		if (memState.enabled && memoryManager.modelReady) {
+			memoryManager.preloadEmbeddings().catch(() => {});
+		}
 		await recorder.startRecording();
 		stt.recording = true;
 	}

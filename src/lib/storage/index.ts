@@ -320,12 +320,13 @@ export class StorageManager {
 		stt?: any;
 		sequencer?: any;
 		visuals?: any;
+		ui?: any;
 		playlistEnabled?: Record<string, boolean>;
 		character?: any;
 		conversation?: any[];
 		memory?: any;
 	}) {
-		const { llm, tts, stt, sequencer, visuals, playlistEnabled, character, conversation, memory } = state;
+		const { llm, tts, stt, sequencer, visuals, ui, playlistEnabled, character, conversation, memory } = state;
 		if (llm) {
 			await this.setSetting('llm.provider', llm.provider);
 			await this.setSetting('llm.model', llm.model);
@@ -360,6 +361,10 @@ export class StorageManager {
 		}
 		if (visuals) {
 			await this.setSetting('visuals', visuals);
+		}
+		if (ui) {
+			await this.setSetting('ui.settingsPanelOpen', ui.settingsPanelOpen);
+			await this.setSetting('ui.activeTab', ui.activeTab);
 		}
 		if (playlistEnabled) {
 			await this.setSetting('playlist.enabled', playlistEnabled);
@@ -446,6 +451,10 @@ export class StorageManager {
 				summarizationModel: await this.getSetting('memory.summarizationModel', ''),
 				summarizationApiKey: await this.getSetting('memory.summarizationApiKey', ''),
 				summarizationEndpoint: await this.getSetting('memory.summarizationEndpoint', '')
+			},
+			ui: {
+				settingsPanelOpen: await this.getSetting('ui.settingsPanelOpen', false),
+				activeTab: await this.getSetting('ui.activeTab', 'vrm')
 			},
 			visuals: await this.getSetting('visuals', null),
 			playlistEnabled: await this.getSetting('playlist.enabled', null) as Record<string, boolean> | null,

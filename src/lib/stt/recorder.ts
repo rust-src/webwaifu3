@@ -12,15 +12,43 @@ export class SttRecorder {
 	private messageId = 0;
 	private pendingRequests = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void }>();
 
+	// Silence detection
+	private silenceStart: number | null = null;
+	private hasSpoken = false;  // Only auto-stop after user actually spoke
+	silenceDetection = false;
+	silenceThreshold = 0.01;
+	silenceTimeoutMs = 1500;
+
 	onModelReady: (() => void) | null = null;
 	onModelError: ((error: string) => void) | null = null;
 	onTranscript: ((text: string) => void) | null = null;
 	onError: ((error: string) => void) | null = null;
+	onAutoStop: (() => void) | null = null;
 
 	private appendAudioChunk(chunk: Float32Array | ArrayBuffer) {
 		if (!this.recording) return;
-		const copy = chunk instanceof Float32Array ? chunk : new Float32Array(chunk);
-		this.audioChunks.push(copy);
+		const data = chunk instanceof Float32Array ? chunk : new Float32Array(chunk);
+		this.audioChunks.push(new Float32Array(data));
+
+		// RMS-based silence detection
+		if (this.silenceDetection) {
+			let sum = 0;
+			for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+			const rms = Math.sqrt(sum / data.length);
+
+			if (rms >= this.silenceThreshold) {
+				this.hasSpoken = true;
+				this.silenceStart = null;
+			} else if (this.hasSpoken) {
+				// Only detect silence after user has spoken
+				if (!this.silenceStart) {
+					this.silenceStart = Date.now();
+				} else if (Date.now() - this.silenceStart > this.silenceTimeoutMs) {
+					this.silenceStart = null;
+					this.onAutoStop?.();
+				}
+			}
+		}
 	}
 
 	private setupScriptProcessorFallback() {
@@ -143,6 +171,8 @@ export class SttRecorder {
 			this.audioContext = new AudioContext({ sampleRate: 16000 });
 			this.sourceNode = this.audioContext.createMediaStreamSource(this.stream);
 			this.audioChunks = [];
+			this.silenceStart = null;
+			this.hasSpoken = false;
 			await this.setupCaptureNode();
 			this.recording = true;
 		} catch (err: any) {
