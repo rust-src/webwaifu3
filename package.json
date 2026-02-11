@@ -29,6 +29,7 @@
 		"@huggingface/transformers": "^3.8.1",
 		"@pixiv/three-vrm": "^3.4.5",
 		"@sveltejs/adapter-vercel": "^6.3.1",
+		"@vercel/analytics": "^1.6.1",
 		"ai": "^6.0.77",
 		"fish-audio": "^0.0.3",
 		"kokoro-js": "^1.2.1",
@@ -36,4 +37,3 @@
 		"three": "^0.182.0"
 	}
 }
-
