@@ -9,6 +9,7 @@
 <p>
   <a href="#quick-start">Quick Start</a> |
   <a href="#feature-surface">Features</a> |
+  <a href="#v2-vs-v3">V2 vs V3</a> |
   <a href="#provider-setup">Provider Setup</a> |
   <a href="#architecture">Architecture</a>
 </p>
@@ -33,58 +34,82 @@
 
 <h2 align="center" id="what-it-is">What It Is</h2>
 
-WEBWAIFU 3 is a SvelteKit application that renders a VRM avatar and connects it to chat + voice AI pipelines in the browser.
+WEBWAIFU 3 is a complete rewrite of [WEBWAIFU V2](https://github.com/xsploit/WEBWAIFUV2). Same concept — a browser-based AI companion with a 3D avatar — but rebuilt from scratch with a proper framework, typed codebase, and a more focused feature set.
+
+V2 was vanilla JS with no build system, supported both VRM and Live2D, used Edge TTS, and ran on Netlify. V3 drops the cruft, picks better defaults, and ships as a real SvelteKit app.
 
 Primary routes:
 
 - `/` main companion UI
 - `/manager` provider config, memory controls, voice management, and data tools
 
+<h2 align="center" id="v2-vs-v3">What Changed from V2</h2>
+
+| | V2 | V3 |
+|---|---|---|
+| **Framework** | Vanilla JS, no build | SvelteKit 2 + Vite 7 + TypeScript |
+| **Avatar** | VRM + Live2D (Pixi.js) | VRM only — deeper Three.js integration, post-processing, animation sequencer |
+| **TTS** | Edge TTS (free) + Fish Audio | Kokoro (local, runs on WebGPU/WASM) + Fish Audio (realtime PCM streaming) |
+| **LLM** | Gemini, OpenAI, OpenRouter, Ollama | OpenAI, OpenRouter, Ollama, LM Studio — all via Vercel AI SDK Responses API |
+| **STT** | Whisper tiny | Whisper tiny with silence trimming + transcript sanitization |
+| **Memory** | Embeddings + summarization | Same core but proper Web Worker isolation, hybrid mode, configurable summarization LLM |
+| **Lip sync** | Phoneme (Edge TTS) + amplitude (Fish) | Approximate phoneme mapping + PCM amplitude analysis (both providers) |
+| **Deploy** | Netlify serverless | Vercel (adapter-vercel) |
+| **State** | localStorage + IndexedDB | Svelte 5 runes + IndexedDB (StorageManager singleton) |
+| **Persistence** | Partial | Full — every setting, conversation, VRM binary, voice list persisted |
+
+**Dropped**: Live2D, Gemini, Edge TTS, DistilBERT, Pixi.js, Netlify functions.
+**Added**: Kokoro local TTS, LM Studio, realtime Fish PCM streaming, post-processing pipeline, animation sequencer, character system, TTS formatting rules auto-injection, semantic memory with vector search.
+
 <h2 align="center" id="feature-surface">Feature Surface</h2>
 
 ### AI chat
 
 - Providers: `ollama`, `lmstudio`, `openai`, `openrouter`
-- Streaming token output wired into TTS enqueue flow
+- Streaming token output wired into TTS sentence accumulator
 - Per-request Ollama tuning: `num_ctx`, `flash_attn`, `kv_cache_type`
-- Character-based system prompts
+- Character-based system prompts with user nickname support
+- Auto-injected TTS formatting rules when voice is enabled (no emojis, spoken prose, proper punctuation)
 
 ### Text-to-speech
 
-- Kokoro local TTS in a dedicated worker
-- Fish Audio cloud TTS (streaming and non-streaming paths)
+- **Kokoro**: local TTS via Web Worker, runs on WebGPU with WASM fallback, configurable device + precision (fp32/fp16/q8/q4/q4f16)
+- **Fish Audio**: cloud TTS with realtime PCM streaming over WebSocket, configurable latency mode
+- Sentence accumulator splits LLM output into natural TTS chunks
 - Fish voice model operations from manager UI: list, search, create, delete
 
 ### Speech-to-text
 
-- Whisper model: `Xenova/whisper-tiny.en`
-- Worker-based transcription
+- Whisper model: `Xenova/whisper-tiny.en` in a Web Worker
+- Silence trimming before transcription to reduce hallucinations
+- Transcript sanitization (filters repeated-char artifacts)
 - Push-to-talk with optional auto-send and mic permission pre-check
 
 ### Semantic memory
 
-- Embeddings model: `Xenova/all-MiniLM-L6-v2` in worker
-- Modes: `auto-prune`, `auto-summarize`, `hybrid`
-- Similarity retrieval merges relevant history into prompt context
-- Optional summarization LLM configuration
+- Embeddings model: `Xenova/all-MiniLM-L6-v2` (384-dim) in a Web Worker
+- Modes: `auto-prune`, `auto-summarize`, `hybrid` (default)
+- Cosine similarity search injects relevant history into prompt context
+- Optional summarization LLM with separate provider/model/key configuration
+- Model can be loaded/unloaded on demand to free GPU memory
 
 ### 3D avatar and rendering
 
-- VRM load from built-in asset or user upload
-- Animation playlist/sequencer and crossfade controls
+- VRM load from built-in asset or user upload (binary persisted in IndexedDB)
+- Animation playlist/sequencer with crossfade controls
 - Realistic material toggle (PBR path)
-- Post-processing controls: bloom, chromatic aberration, film grain, glitch, FXAA/SMAA/TAA, bleach bypass, color correction, outline
+- Post-processing: bloom, chromatic aberration, film grain, glitch, FXAA/SMAA/TAA, bleach bypass, color correction, outline
 - Adjustable key/fill/rim/hemi/ambient lighting
-- Lip sync driven from active speech playback
+- Lip sync driven from both HTMLAudioElement (Kokoro) and PCM AudioBufferSourceNode (Fish) playback paths
 
 ### Persistence and management
 
-- App settings saved in IndexedDB
-- Provider defaults, visual settings, active tab, and conversation state persisted
+- All settings saved in IndexedDB via StorageManager singleton
+- Provider defaults, visual settings, active tab, conversation state, Fish voice lists all persisted
+- Conversation auto-save on every user + assistant message
 - Conversation export (`JSON`, `TXT`)
 - Data tools in manager: export all, import, clear history, factory reset
 - Custom VRM binary persisted in IndexedDB
-- Splash acceptance modal is shown on every load
 
 <h2 align="center" id="quick-start">Quick Start</h2>
 
@@ -93,6 +118,7 @@ Primary routes:
 - Node.js (current LTS recommended)
 - npm
 - Modern browser with WebGL + WebAudio support
+- WebGPU recommended for Kokoro TTS (falls back to WASM automatically)
 - At least one chat backend:
   - Local (`Ollama` or `LM Studio`)
   - Cloud (`OpenAI` or `OpenRouter`)
@@ -104,7 +130,7 @@ npm install
 npm run dev
 ```
 
-Dev URL: `https://localhost:5173`  
+Dev URL: `https://localhost:5173`
 Note: HTTPS in development is provided by `@vitejs/plugin-basic-ssl`.
 
 <h2 align="center" id="provider-setup">Provider Setup</h2>
@@ -142,56 +168,56 @@ Windows:
 
 1. Add Fish API key in `/manager`.
 2. Fish requests are proxied through server routes:
-   - `POST /api/tts/fish`
-   - `POST /api/tts/fish-stream`
+   - `POST /api/tts/fish` (single request)
+   - `POST /api/tts/fish-stream` (realtime WebSocket streaming, PCM)
 
 <h2 align="center" id="model-and-runtime-notes">Model and Runtime Notes</h2>
 
 On first use, browser-side model downloads may occur and be cached:
 
-- Kokoro ONNX model (local TTS)
-- Whisper tiny.en model (local STT, roughly 40 MB class)
-- MiniLM-L6-v2 model (embeddings, roughly 23 MB class)
+| Model | Size | Purpose | Runtime |
+|-------|------|---------|---------|
+| Kokoro 82M ONNX | ~86 MB | Local TTS | WebGPU / WASM |
+| Whisper tiny.en | ~40 MB | Local STT | Web Worker |
+| MiniLM-L6-v2 | ~23 MB | Embeddings / memory | Web Worker |
 
-Exact download size and startup latency can vary by platform and upstream model packaging.
+Models are loaded on demand — Whisper and embeddings only init when you use them. Kokoro inits automatically when TTS is enabled with the Kokoro provider.
 
 <h2 align="center" id="security">Security</h2>
 
-- Keys are stored in browser IndexedDB.
-- Keys are sent only to selected providers and required proxy endpoints.
-- Fish TTS requires API key transit through your deployed SvelteKit server route.
-- Use scoped keys and provider spending limits for production.
+- Keys are stored in browser IndexedDB only
+- Keys are sent only to selected providers and required proxy endpoints
+- API key inputs use CSS text-security masking to prevent browser password manager interference
+- Fish TTS requires API key transit through your deployed SvelteKit server route
+- Use scoped keys and provider spending limits for production
 
 <h2 align="center" id="scripts">Scripts</h2>
 
 ```bash
-npm run dev
-npm run build
-npm run preview
-npm run check
+npm run dev       # Dev server with HTTPS
+npm run build     # Production build
+npm run preview   # Preview production build
+npm run check     # Svelte type checking
 ```
 
 <h2 align="center" id="architecture">Architecture</h2>
 
-- Frontend: SvelteKit 2, Svelte 5, TypeScript
+- Frontend: SvelteKit 2, Svelte 5 runes, TypeScript
 - 3D: `three`, `@pixiv/three-vrm`
-- LLM: `ai`, `@ai-sdk/openai`, `@ai-sdk/open-responses`
-- STT/Memory models: `@huggingface/transformers` in web workers
-- TTS: `kokoro-js` (local), `fish-audio` (cloud)
+- LLM: Vercel AI SDK (`ai`, `@ai-sdk/openai`) — Responses API
+- STT/Memory models: `@huggingface/transformers` in Web Workers
+- TTS: `kokoro-js` (local WebGPU/WASM), `fish-audio` (cloud WebSocket)
 - Persistence: IndexedDB via `src/lib/storage/index.ts`
+- Analytics: Vercel Web Analytics
 
 <h2 align="center" id="deployment">Deployment</h2>
 
 Current project config uses `@sveltejs/adapter-vercel` (`svelte.config.js`).
 
-If you deploy to a different target, switch adapters and ensure the Fish API routes are deployed server-side.
+If you deploy to a different target, switch adapters and ensure the Fish API routes (`src/routes/api/tts/`) are deployed server-side.
 
-<h2 align="center" id="project-notes">Project Notes</h2>
-
-- UI branding is `WEBWAIFU 3`.
-- Some storage internals still use legacy naming for migration compatibility.
+Live: [webwaifu3.vercel.app](https://webwaifu3.vercel.app/)
 
 <h2 align="center" id="license">License</h2>
 
 This repository currently does not include a `LICENSE` file. Add one before public distribution.
-
