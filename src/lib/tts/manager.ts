@@ -141,8 +141,8 @@ export class TtsManager {
 		this.audioSource = null;
 		this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
 		this.audioAnalyser = this.audioContext.createAnalyser();
-		this.audioAnalyser.fftSize = 128;
-		this.audioAnalyser.smoothingTimeConstant = 0.05;
+		this.audioAnalyser.fftSize = 256;
+		this.audioAnalyser.smoothingTimeConstant = 0.3;
 		this._analyserConnected = false;
 		this.audioDataArray = new Uint8Array(this.audioAnalyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
 		this.startTtsWorker();
@@ -998,6 +998,40 @@ export class TtsManager {
 		// Fish PCM is much hotter than HTMLAudioElement — scale down to avoid saturation
 		const scale = this.currentAudio ? 2.5 : 1.0;
 		return Math.min((average / 255) * scale, 1.0);
+	}
+
+	/**
+	 * Returns energy levels for frequency bands mapped to viseme-relevant ranges.
+	 * fftSize=256 → 128 bins. At 44100Hz each bin ≈ 172Hz.
+	 *   lowBand:  0-860Hz   (bins 0-4)   — fundamental freq, jaw openness (aa, oh)
+	 *   midLow:   860-2150Hz (bins 5-12)  — first formant region (ih, ah)
+	 *   midHigh:  2150-3440Hz (bins 13-19) — second formant, sibilants (ee, ou)
+	 *   highBand: 3440-6020Hz (bins 20-34) — fricatives, brightness (ss, sh shapes)
+	 */
+	getFrequencyBands(): { low: number; midLow: number; midHigh: number; high: number } | null {
+		if (!this.audioAnalyser || !this.audioDataArray) return null;
+		if (!this.isPlaying) return null;
+		if (this.currentAudio && this.currentAudio.paused) return null;
+
+		this.audioAnalyser.getByteFrequencyData(this.audioDataArray);
+		const d = this.audioDataArray;
+		const len = d.length; // 128 bins
+
+		const bandEnergy = (start: number, end: number) => {
+			end = Math.min(end, len);
+			if (start >= end) return 0;
+			let sum = 0;
+			for (let i = start; i < end; i++) sum += d[i];
+			return (sum / ((end - start) * 255));
+		};
+
+		const scale = this.currentAudio ? 2.5 : 1.0;
+		return {
+			low: Math.min(bandEnergy(0, 5) * scale, 1.0),
+			midLow: Math.min(bandEnergy(5, 13) * scale, 1.0),
+			midHigh: Math.min(bandEnergy(13, 20) * scale, 1.0),
+			high: Math.min(bandEnergy(20, 35) * scale, 1.0)
+		};
 	}
 
 	async getFishVoices(): Promise<VoiceInfo[]> {

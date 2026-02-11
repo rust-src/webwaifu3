@@ -125,7 +125,15 @@ async function runWebSocketSession(
 		chunk_length: 200,
 		normalize: true,
 		latency: (config.latency || 'balanced') as 'normal' | 'balanced',
-		prosody: { speed: 1.0, volume: 0.0 }
+		prosody: { speed: 1.0, volume: 0.0 },
+		// Voice consistency params (from Python SDK defaults)
+		condition_on_previous_chunks: true,
+		top_p: 0.7,
+		temperature: 0.7,
+		repetition_penalty: 1.2,
+		max_new_tokens: 1024,
+		min_chunk_length: 50,
+		early_stop_threshold: 1.0
 	};
 
 	const ct =

@@ -64,7 +64,6 @@ function getCleanPhonemes(raw: string): string[] {
 			.split('')
 			.filter((c: string) => c.trim().length > 0);
 		phonemeCache.set(raw, cached);
-		// Limit cache size to prevent unbounded growth
 		if (phonemeCache.size > 500) {
 			const first = phonemeCache.keys().next().value;
 			if (first !== undefined) phonemeCache.delete(first);
@@ -142,7 +141,9 @@ export function updateLipSync(vrm: VRM | null, ttsManager: TtsManager) {
 		}
 	}
 
-	// Phoneme mode
+	let usedPhonemeMode = false;
+
+	// Phoneme mode (Kokoro — has word boundaries + phoneme data)
 	if (hasValidTiming && currentWordBoundary && ttsManager.currentPhonemes) {
 		let wordPhonemes = '';
 		if (Array.isArray(ttsManager.currentPhonemes)) {
@@ -192,38 +193,65 @@ export function updateLipSync(vrm: VRM | null, ttsManager: TtsManager) {
 					if (targetAa + targetIh + targetOu + targetEe + targetOh < 0.2) {
 						targetAa = Math.max(targetAa, effectiveAmplitude * 0.5);
 					}
-				} else {
-					targetAa = Math.max(audioAmplitude * 1.0, 0.3);
+					usedPhonemeMode = true;
 				}
 			}
 		}
 	}
 
-	// Amplitude mode (fallback)
-	if (targetAa === 0 && targetIh === 0 && targetOu === 0 && targetEe === 0 && targetOh === 0) {
-		const time = currentTime * 4.5;
-		const cycle = Math.sin(time) * 0.5 + 0.5;
-		targetAa = audioAmplitude * 1.0;
+	// Frequency-band viseme estimation (primary fallback — Fish Audio + any non-phoneme audio)
+	// Maps FFT frequency bands to mouth shapes based on formant frequencies:
+	//   Low band (0-860Hz)    → jaw open (aa/oh) — vocal fundamental + F1
+	//   Mid-low (860-2150Hz)  → mid shapes (ih)  — F1-F2 transition
+	//   Mid-high (2150-3440Hz)→ spread/round (ee/ou) — F2 region
+	//   High (3440-6020Hz)    → fricatives (slight ih) — sibilance
+	if (!usedPhonemeMode) {
+		const bands = ttsManager.getFrequencyBands();
 
-		if (cycle < 0.2) {
-			targetAa = Math.min(targetAa * 1.3, 1.0);
-		} else if (cycle < 0.4) {
-			targetIh = Math.min(audioAmplitude * 0.75, 1.0);
-			targetAa *= 0.6;
-		} else if (cycle < 0.6) {
-			targetOu = Math.min(audioAmplitude * 0.75, 1.0);
-			targetAa *= 0.6;
-		} else if (cycle < 0.8) {
-			targetEe = Math.min(audioAmplitude * 0.75, 1.0);
-			targetAa *= 0.6;
+		if (bands) {
+			const { low, midLow, midHigh, high } = bands;
+			const total = low + midLow + midHigh + high;
+
+			if (total > 0.05) {
+				// Normalize bands relative to each other
+				const nLow = low / total;
+				const nMidLow = midLow / total;
+				const nMidHigh = midHigh / total;
+				const nHigh = high / total;
+
+				// Map frequency distribution to visemes
+				// aa: jaw open — dominated by low frequencies (open vowels like "ah", "aah")
+				targetAa = Math.min(nLow * 1.4 * audioAmplitude * 2.0, 1.0);
+
+				// oh: rounded lips — low + some mid (vowels like "oh", "oo")
+				targetOh = Math.min((nLow * 0.5 + nMidLow * 0.5) * audioAmplitude * 1.6, 0.8);
+
+				// ih: slight open — mid frequencies (vowels like "ih", "eh")
+				targetIh = Math.min((nMidLow * 0.8 + nHigh * 0.4) * audioAmplitude * 1.6, 0.7);
+
+				// ee: wide spread — high-mid frequencies (vowels like "ee", "ay")
+				targetEe = Math.min(nMidHigh * 1.2 * audioAmplitude * 1.8, 0.7);
+
+				// ou: rounded/pursed — mid balance (vowels like "oo", "ou")
+				targetOu = Math.min((nMidHigh * 0.6 + nLow * 0.3) * audioAmplitude * 1.4, 0.6);
+
+				// Ensure minimum mouth movement when audio is playing
+				if (targetAa + targetIh + targetOu + targetEe + targetOh < 0.15) {
+					targetAa = Math.max(audioAmplitude * 0.5, 0.15);
+				}
+			} else {
+				// Very quiet — barely open
+				targetAa = audioAmplitude * 0.3;
+			}
 		} else {
-			targetOh = Math.min(audioAmplitude * 0.75, 1.0);
-			targetAa *= 0.6;
+			// No frequency data available — simple amplitude-only fallback
+			targetAa = audioAmplitude * 0.8;
+			targetIh = audioAmplitude * 0.15;
 		}
 	}
 
-	// Smooth transitions
-	const smoothing = 0.1;
+	// Smooth transitions — higher value = smoother/slower mouth movement
+	const smoothing = usedPhonemeMode ? 0.25 : 0.35;
 	const smoothedAa = previousAa + (targetAa - previousAa) * (1 - smoothing);
 	const smoothedIh = previousIh + (targetIh - previousIh) * (1 - smoothing);
 	const smoothedOu = previousOu + (targetOu - previousOu) * (1 - smoothing);
